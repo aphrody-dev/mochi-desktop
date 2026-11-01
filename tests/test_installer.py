@@ -13,6 +13,11 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLER = ROOT / "install.sh"
 
+pytestmark = pytest.mark.skipif(
+    os.name == "nt" or shutil.which("chmod") is None,
+    reason="Linux bash installer tests require a POSIX userland",
+)
+
 
 def _write_executable(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")

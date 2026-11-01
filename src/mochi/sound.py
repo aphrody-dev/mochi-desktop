@@ -55,6 +55,32 @@ class CommandAudioBackend:
         elif self.kind == "paplay":
             pulse_volume = round(volume * 65_536)
             command = (self.executable, f"--volume={pulse_volume}", str(path))
+        elif self.kind == "afplay":
+            command = (self.executable, "--volume", str(volume), str(path))
+        elif self.kind == "ffplay":
+            ff_vol = max(0, min(100, round(volume * 100)))
+            command = (
+                self.executable,
+                "-nodisp",
+                "-autoexit",
+                "-loglevel",
+                "quiet",
+                "-volume",
+                str(ff_vol),
+                str(path),
+            )
+        elif self.kind == "winsound":
+            if path.suffix.lower() == ".wav":
+                try:
+                    import winsound  # type: ignore[import-not-found]
+
+                    winsound.PlaySound(
+                        str(path),
+                        winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT,
+                    )
+                except Exception:
+                    pass
+            return
         else:
             raise ValueError(f"Unsupported audio backend: {self.kind}")
         subprocess.Popen(
@@ -355,10 +381,14 @@ class SoundManager:
         for executable, kind in (
             ("pw-play", "pw-play"),
             ("paplay", "paplay"),
+            ("afplay", "afplay"),
+            ("ffplay", "ffplay"),
         ):
             path = shutil.which(executable)
             if path is not None:
                 return CommandAudioBackend(path, kind)
+        if sys.platform == "win32":
+            return CommandAudioBackend("winsound", "winsound")
         return None
 
     @staticmethod

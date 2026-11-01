@@ -72,22 +72,67 @@ def read_payload(stream, *, deadline_seconds: float) -> bytes:
             kept += len(chunks[-1])
 
     deadline = time.monotonic() + deadline_seconds
+    if os.name == "nt":
+        import ctypes
+        import ctypes.wintypes
+        import msvcrt
+
+        try:
+            handle = msvcrt.get_osfhandle(fd)
+        except (OSError, ValueError):
+            handle = -1
+        peek_pipe = ctypes.windll.kernel32.PeekNamedPipe
+        file_type = ctypes.windll.kernel32.GetFileType(handle) if handle != -1 else 0
+        # FILE_TYPE_PIPE == 0x0003; regular files (0x0001) and NUL/char (0x0002) never block
+        if file_type == 3:
+            avail = ctypes.wintypes.DWORD(0)
+            while kept < MAX_STDIN_BYTES and time.monotonic() < deadline:
+                ok = peek_pipe(
+                    handle,
+                    None,
+                    0,
+                    None,
+                    ctypes.byref(avail),
+                    None,
+                )
+                if not ok:
+                    # Broken pipe / EOF on write end
+                    break
+                if avail.value > 0:
+                    to_read = min(65536, int(avail.value), MAX_STDIN_BYTES - kept)
+                    chunk = os.read(fd, to_read)
+                    if not chunk:
+                        break
+                    keep(chunk)
+                else:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    time.sleep(min(0.01, remaining))
+            return b"".join(chunks)
+        try:
+            while kept < MAX_STDIN_BYTES and (chunk := os.read(fd, 65536)):
+                keep(chunk)
+        except (OSError, ValueError):
+            pass
+        return b"".join(chunks)
+
     with selectors.DefaultSelector() as selector:
         try:
             selector.register(fd, selectors.EVENT_READ)
+            while (remaining := deadline - time.monotonic()) > 0:
+                if not selector.select(remaining):
+                    break
+                chunk = os.read(fd, 65536)
+                if not chunk:
+                    break
+                keep(chunk)
         except (OSError, ValueError):
             # epoll refuses regular files and /dev/null. Those never block, so
             # a plain bounded read loop is safe for them.
             while kept < MAX_STDIN_BYTES and (chunk := os.read(fd, 65536)):
                 keep(chunk)
             return b"".join(chunks)
-        while (remaining := deadline - time.monotonic()) > 0:
-            if not selector.select(remaining):
-                break
-            chunk = os.read(fd, 65536)
-            if not chunk:
-                break
-            keep(chunk)
     return b"".join(chunks)
 
 

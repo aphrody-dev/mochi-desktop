@@ -229,11 +229,13 @@ def test_debug_stack_dumps_register_sigusr1(monkeypatch) -> None:
 
     from mochi import main as mochi_main
 
+    sigusr1 = getattr(signal, "SIGUSR1", 10)
+    monkeypatch.setattr(signal, "SIGUSR1", sigusr1, raising=False)
     calls = []
     monkeypatch.setattr(
-        faulthandler, "register", lambda signum, **kwargs: calls.append((signum, kwargs))
+        faulthandler, "register", lambda signum, **kwargs: calls.append((signum, kwargs)), raising=False
     )
 
     mochi_main.enable_debug_stack_dumps()
 
-    assert calls == [(signal.SIGUSR1, {"all_threads": True})]
+    assert calls == [(sigusr1, {"all_threads": True})]

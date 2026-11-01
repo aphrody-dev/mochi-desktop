@@ -276,7 +276,7 @@ def test_refresh_failure_rolls_back_previous_runtime(tmp_path: Path) -> None:
 
     assert (paths.final_venv / "old.marker").read_text(encoding="utf-8") == "old"
     assert not paths.backup_venv.exists()
-    assert harness.launches[-1][0].endswith("/venv/bin/mochi")
+    assert Path(harness.launches[-1][0]).as_posix().endswith("/venv/bin/mochi")
 
 
 def test_readiness_timeout_restores_previous_runtime_and_relaunches_it(
@@ -291,7 +291,7 @@ def test_readiness_timeout_restores_previous_runtime_and_relaunches_it(
     assert (paths.final_venv / "old.marker").read_text(encoding="utf-8") == "old"
     assert not paths.backup_venv.exists()
     assert harness.ready_timeouts == [READY_TIMEOUT_SECONDS]
-    assert harness.launches[-1][0].endswith("/venv/bin/mochi")
+    assert Path(harness.launches[-1][0]).as_posix().endswith("/venv/bin/mochi")
 
 
 def test_stale_backup_restores_when_final_runtime_is_missing(tmp_path: Path) -> None:
@@ -450,7 +450,9 @@ def test_rollback_relaunch_also_gets_a_clean_environment(
 
     assert len(harness.launches) == 2
     launch_envs = [
-        env for name, env in harness.child_environments if name.endswith("/bin/mochi")
+        env
+        for name, env in harness.child_environments
+        if Path(name).as_posix().endswith("/bin/mochi")
     ]
     assert len(launch_envs) == 2
     for env in launch_envs:
@@ -528,7 +530,7 @@ def test_candidate_check_failure_rolls_back_and_reports_why(tmp_path: Path) -> N
     assert "startup check" in message
     assert "No module named 'mochi.main'" in message
     assert (paths.final_venv / "old.marker").read_text(encoding="utf-8") == "old"
-    assert harness.launches[-1][0].endswith("/venv/bin/mochi")
+    assert Path(harness.launches[-1][0]).as_posix().endswith("/venv/bin/mochi")
     assert store.load() is None
 
 

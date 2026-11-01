@@ -94,7 +94,7 @@ def test_bootstrap_copies_update_package_and_selected_art_before_launch(
     }
 
     command, env = calls[0]
-    assert command[0] == "/usr/bin/python3"
+    assert Path(command[0]).as_posix() == "/usr/bin/python3"
     assert command[1] == str(workspace / "runner.py")
     assert env["MOCHI_UPDATER_ASSET_ROOT"] == str(workspace / "assets" / "mochi")
     # An exported PYTHONPATH reaches install.sh and the relaunched Mochi, where
@@ -212,6 +212,14 @@ def test_real_bootstrap_package_imports_without_rest_of_mochi(tmp_path: Path) ->
     )
 
     workspace = next((app_home / "update-bootstrap").iterdir())
+    # Copy cross-platform pure-Python cairo/gi fallback shims if present in src/
+    src_root = Path(__file__).resolve().parents[1] / "src"
+    if (src_root / "cairo.py").is_file():
+        import shutil as _shutil
+        _shutil.copy2(src_root / "cairo.py", workspace / "cairo.py")
+    if (src_root / "gi").is_dir():
+        import shutil as _shutil
+        _shutil.copytree(src_root / "gi", workspace / "gi", dirs_exist_ok=True)
     runner_source = (workspace / "runner.py").read_text(encoding="utf-8")
     import_prelude = runner_source.split("request_path =", 1)[0]
     probe = workspace / "probe.py"

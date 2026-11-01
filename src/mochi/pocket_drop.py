@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+import os
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -42,12 +43,21 @@ def _existing_local_path_from_string(candidate: str) -> Path | None:
             raise ValueError("Pocket file URI must reference this computer")
         if parsed.query or parsed.fragment:
             raise ValueError("Pocket file URI must not include query or fragment")
-        path = Path(unquote(parsed.path))
+        raw_path = unquote(parsed.path)
+        if (
+            os.name == "nt"
+            and raw_path.startswith("/")
+            and len(raw_path) > 2
+            and raw_path[2] == ":"
+        ):
+            raw_path = raw_path[1:]
+        path = Path(raw_path)
         if not path.is_absolute() or not path.exists():
             raise ValueError("Pocket file URI does not reference an available local path")
         return path
 
-    if parsed.scheme:
+    # On Windows, paths like "C:\foo\bar.txt" parse with scheme="c".
+    if parsed.scheme and not (len(parsed.scheme) == 1 and candidate[1:2] == ":"):
         return None
 
     path = Path(candidate).expanduser()
@@ -69,7 +79,7 @@ def items_from_string_payload(value: str) -> PocketItem:
         return make_local_file_item(local_path)
 
     parsed = urlsplit(candidate)
-    if parsed.scheme:
+    if parsed.scheme and not (len(parsed.scheme) == 1 and candidate[1:2] == ":"):
         if parsed.scheme.lower() not in {"http", "https"}:
             raise ValueError("Pocket does not support this URI scheme")
         return make_url_item(candidate)

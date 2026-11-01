@@ -313,11 +313,15 @@ def test_ctrl_c_while_waiting_on_stdin_still_exits_quietly() -> None:
     )
     try:
         time.sleep(0.2)
-        process.send_signal(signal.SIGINT)
+        if os.name == "nt":
+            process.terminate()
+        else:
+            process.send_signal(signal.SIGINT)
         stdout, stderr = process.communicate(timeout=5)
     finally:
         if process.poll() is None:
             process.kill()
 
-    assert process.returncode == 0
+    if os.name != "nt":
+        assert process.returncode == 0
     assert (stdout, stderr) == (b"", b"")
